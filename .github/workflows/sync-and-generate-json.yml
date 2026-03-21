@@ -1,0 +1,106 @@
+name: 'Phase 1: Sync Source and Generate i18n JSONs (setup.sh)'
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo_url:
+        description: 'The full HTTPS URL of the source Docusaurus repository to sync from.'
+        required: true
+      docusaurus_root_path:
+        description: 'Path to Docusaurus project root relative to the repo root.'
+        required: false
+        default: '.'
+
+jobs:
+  sync_and_generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 'Checkout main branch'
+        uses: actions/checkout@v4
+        with:
+          ref: 'main'
+
+      - name: 'Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 'Enable Corepack'
+        run: corepack enable
+
+      - name: 'Run setup.sh (clone, install, write-translations)'
+        run: |
+          if [ -f ".github/scripts/setup.sh" ]; then
+            echo "Found setup.sh, executing..."
+            chmod +x .github/scripts/setup.sh
+            bash .github/scripts/setup.sh
+          else
+            echo "ERROR: setup.sh not found at .github/scripts/setup.sh"
+            exit 1
+          fi
+
+      - name: 'Get source commit SHA'
+        id: get_sha
+        run: |
+          if [ -d "source-repo" ]; then
+            echo "sha=$(cd source-repo && git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          else
+            echo "ERROR: source-repo directory not found after setup.sh"
+            exit 1
+          fi
+
+      - name: 'Sync files from source-repo to working directory'
+        run: |
+          rsync -av --delete --exclude='.git/' --exclude='.github/' --exclude='.translation_memory/' --exclude='source-repo/' ./source-repo/ ./
+          rm -rf ./source-repo
+
+      - name: 'Write sync info file for idempotency'
+        run: |
+          echo '{ "source_commit_sha": "${{ steps.get_sha.outputs.sha }}" }' > ./.transaurus_sync.json
+
+      - name: 'Apply repository-specific fixes'
+        run: |
+          if [ -f ".github/scripts/apply-repository-fixes.cjs" ]; then
+            echo "Found repository-specific fixes script"
+            node .github/scripts/apply-repository-fixes.cjs
+          else
+            echo "No repository-specific fixes script found"
+          fi
+
+      - name: 'Sanitize .gitignore to allow i18n folder and image files'
+        run: |
+          for gitignore_file in $(find . -name ".gitignore"); do
+            echo "Processing $gitignore_file..."
+            sed -i '/i18n/d' "$gitignore_file"
+            sed -i '/^\*\.png$/d' "$gitignore_file"
+            sed -i '/^\*\.jpg$/d' "$gitignore_file"
+            sed -i '/^\*\.jpeg$/d' "$gitignore_file"
+            sed -i '/^\*\.gif$/d' "$gitignore_file"
+            sed -i '/^\*\.svg$/d' "$gitignore_file"
+            sed -i '/^\*\.webp$/d' "$gitignore_file"
+            sed -i '/^\*\.ico$/d' "$gitignore_file"
+            sed -i '/^\*\.bmp$/d' "$gitignore_file"
+            sed -i '/^\s*\*\.png\s*$/d' "$gitignore_file"
+            sed -i '/^\s*\*\.jpg\s*$/d' "$gitignore_file"
+            sed -i '/^\s*\*\.jpeg\s*$/d' "$gitignore_file"
+            sed -i '/^\s*\*\.gif\s*$/d' "$gitignore_file"
+            sed -i '/^\s*\*\.svg\s*$/d' "$gitignore_file"
+            sed -i '/^\s*\*\.webp\s*$/d' "$gitignore_file"
+            sed -i '/^\s*\*\.ico\s*$/d' "$gitignore_file"
+            sed -i '/^\s*\*\.bmp\s*$/d' "$gitignore_file"
+            echo "Sanitized $gitignore_file"
+          done
+
+      - name: 'Commit and push changes'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit --no-verify -m "Phase 1: Sync from source ${{ steps.get_sha.outputs.sha }} and generate i18n JSONs"
+            git push origin main
+          fi
