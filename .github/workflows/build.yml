@@ -1,0 +1,83 @@
+name: Build and commit static site
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install fnm
+        run: |
+          curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+          echo "$HOME/.local/share/fnm" >> $GITHUB_PATH
+
+      - name: Detect and install dependencies
+        shell: bash
+        run: |
+          export FNM_DIR="$HOME/.local/share/fnm"
+          export PATH="$FNM_DIR:$PATH"
+          eval "$(fnm env --shell bash)" 2>/dev/null || true
+
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "PKGMGR=pnpm" >> $GITHUB_ENV
+            npm install -g pnpm
+            pnpm install --no-frozen-lockfile
+          elif [ -f "yarn.lock" ]; then
+            echo "PKGMGR=yarn" >> $GITHUB_ENV
+            yarn install --frozen-lockfile 2>/dev/null || yarn install
+          elif [ -f "package-lock.json" ]; then
+            echo "PKGMGR=npm" >> $GITHUB_ENV
+            npm ci 2>/dev/null || npm install
+          else
+            echo "PKGMGR=npm" >> $GITHUB_ENV
+            npm install --legacy-peer-deps 2>/dev/null || npm install
+          fi
+
+      - name: Build site
+        shell: bash
+        run: |
+          export FNM_DIR="$HOME/.local/share/fnm"
+          export PATH="$FNM_DIR:$PATH"
+          eval "$(fnm env --shell bash)" 2>/dev/null || true
+
+          if grep -q '"build"' package.json 2>/dev/null; then
+            $PKGMGR run build
+          else
+            npx docusaurus build
+          fi
+
+      - name: Verify and commit build
+        run: |
+          if [ ! -d "build" ]; then
+            echo "No build/ directory found"
+            for dir in dist out .next; do
+              [ -d "$dir" ] && echo "Found $dir/ instead"
+            done
+            exit 1
+          fi
+
+          echo "Build output: $(du -sh build/ | cut -f1), $(find build -type f | wc -l) files"
+
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -f build/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit --no-verify -m "Build: static site output"
+            git push origin main
+          fi
