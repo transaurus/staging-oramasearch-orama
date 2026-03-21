@@ -1,0 +1,20 @@
+{
+  "name": "@orama/plugin-astro-sandbox",
+  "type": "module",
+  "version": "@VERSION@",
+  "private": true,
+  "scripts": {
+    "build": "exit 0",
+    "test": "exit 0"
+  },
+  "dependencies": {
+    "@orama/plugin-astro": "^@VERSION@",
+    "astro": "^2.0.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "@orama/orama": "@ROOT@/packages/plugin-astro/tmp/orama-orama-@VERSION@.tgz",
+      "@orama/plugin-astro": "@ROOT@/packages/plugin-astro/tmp/orama-plugin-astro-@VERSION@.tgz"
+    }
+  }
+}

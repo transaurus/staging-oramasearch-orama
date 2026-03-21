@@ -1,0 +1,64 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "inputs": ["packages/**/*.test.js", "packages/**/*.test.jsx", "packages/**/*.test.ts", "packages/**/*.test.tsx"]
+    },
+    "lint": {},
+    "deploy": {
+      "dependsOn": ["^lint", "^build", "^test"]
+    },
+    "@orama/orama#build": {
+      "dependsOn": ["@orama/stemmers#build", "^build"],
+      "outputs": ["dist/**"]
+    },
+    "@orama/plugin-match-highlight#build": {
+      "dependsOn": ["@orama/orama#build", "^build"],
+      "outputs": ["dist/**"]
+    },
+    "@orama/plugin-parsedoc#build": {
+      "dependsOn": ["@orama/orama#build", "^build"],
+      "outputs": ["dist/**"]
+    },
+    "@orama/plugin-astro#build": {
+      "dependsOn": ["@orama/orama#build", "^build"],
+      "outputs": ["dist/**"]
+    },
+    "@orama/plugin-nextra#build": {
+      "dependsOn": ["@orama/orama#build", "@orama/plugin-match-highlight#build", "^build"],
+      "outputs": ["dist/**"]
+    },
+    "@orama/plugin-docusaurus#build": {
+      "dependsOn": [
+        "@orama/orama#build",
+        "@orama/plugin-match-highlight#build",
+        "@orama/plugin-parsedoc#build",
+        "^build"
+      ],
+      "outputs": ["dist/**"]
+    },
+    "@orama/plugin-secure-proxy#build": {
+      "dependsOn": ["@orama/orama#build"],
+      "outputs": ["dist/**"]
+    },
+    "@orama/plugin-embeddings#build": {
+      "dependsOn": ["@orama/orama#build"],
+      "outputs": ["dist/**"]
+    },
+    "@orama/plugin-pt15#build": {
+      "dependsOn": ["@orama/orama#build"],
+      "outputs": ["dist/**"]
+    },
+    "@orama/tokenizers#build": {
+      "dependsOn": ["@orama/orama#build"]
+    },
+    "@orama/switch#build": {
+      "dependsOn": ["@orama/orama#build"]
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "name": "orama-monorepo",
+  "version": "3.1.18",
+  "description": "A complete search engine and RAG pipeline in your browser, server, or edge network with support for full-text, vector, and hybrid search in less than 2kb.",
+  "workspaces": [
+    "packages/*",
+    "sandboxes/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "format": "biome format --write ./packages",
+    "format:hook": "biome format --write --no-errors-on-unmatched ./packages",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "commit": "turbo lint && pnpm lint-staged && cz",
+    "prepare": "husky install .husky",
+    "publish-packages": "node scripts/release.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.5",
+    "@swc/cli": "^0.7.8",
+    "@swc/core": "^1.3.27",
+    "@types/node": "^24.7.0",
+    "@types/tap": "^15.0.7",
+    "c8": "^7.12.0",
+    "commitizen": "^4.2.6",
+    "husky": "^8.0.2",
+    "lint-staged": "^16.2.4",
+    "semver": "^7.3.8",
+    "simple-git": "^3.17.0",
+    "tap": "^18.6.1",
+    "tap-mocha-reporter": "^5.0.3",
+    "tape": "^5.6.1",
+    "tcompare": "^9.0.1",
+    "tsx": "^4.20.6",
+    "turbo": "^2.1.3",
+    "typescript": "^5.0.0"
+  },
+  "author": {
+    "name": "Michele Riva",
+    "email": "michele@orama.com",
+    "url": "https://github.com/MicheleRiva",
+    "author": true
+  },
+  "contributors": [
+    {
+      "name": "Tommaso Allevi",
+      "email": "tommaso.allevi@orama.com",
+      "url": "https://github.com/allevo",
+      "author": true
+    }
+  ],
+  "license": "Apache-2.0",
+  "lint-staged": {
+    "*": [
+      "pnpm format:hook"
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "ignoreMissing": [
+        "@algolia/client-search",
+        "@babel/plugin-syntax-flow",
+        "@babel/plugin-transform-react-jsx",
+        "algoliasearch",
+        "eslint",
+        "typescript"
+      ]
+    },
+    "overrides": {
+      "hastscript": "^9.0.1"
+    }
+  },
+  "engines": {
+    "node": ">= 20.0.0"
+  },
+  "packageManager": "pnpm@10.9.0+sha512.0486e394640d3c1fb3c9d43d49cf92879ff74f8516959c235308f5a8f62e2e19528a65cdc2a3058f587cde71eba3d5b56327c8c33a97e4c4051ca48a10ca2d5f"
+}

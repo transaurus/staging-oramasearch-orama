@@ -1,0 +1,18 @@
+[
+  {
+    "test": ".*\\.ts$",
+    "jsc": {
+      "target": "es2022",
+      "parser": {
+        "syntax": "typescript",
+        "tsx": false,
+        "dynamicImport": true,
+        "importAssertions": true
+      },
+      "experimental": {
+        "keepImportAssertions": true
+      }
+    },
+    "sourceMaps": true
+  }
+]
