@@ -1,4 +1,4 @@
-name: 'Phase 1: Sync Source and Generate i18n JSONs (setup.sh)'
+name: 'Sync, Build and Deploy (setup.sh)'
 
 on:
   workflow_dispatch:
@@ -69,11 +69,15 @@ jobs:
             echo "No repository-specific fixes script found"
           fi
 
-      - name: 'Sanitize .gitignore to allow i18n folder and image files'
+      - name: 'Sanitize .gitignore to allow i18n, build, and image files'
         run: |
           for gitignore_file in $(find . -name ".gitignore"); do
             echo "Processing $gitignore_file..."
             sed -i '/i18n/d' "$gitignore_file"
+            sed -i '/^build$/d' "$gitignore_file"
+            sed -i '/^\/build$/d' "$gitignore_file"
+            sed -i '/^build\/$/d' "$gitignore_file"
+            sed -i '/^\/build\/$/d' "$gitignore_file"
             sed -i '/^\*\.png$/d' "$gitignore_file"
             sed -i '/^\*\.jpg$/d' "$gitignore_file"
             sed -i '/^\*\.jpeg$/d' "$gitignore_file"
@@ -93,14 +97,23 @@ jobs:
             echo "Sanitized $gitignore_file"
           done
 
-      - name: 'Commit and push changes'
+      - name: 'Commit and push changes (including build output)'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add .
+          # Force-add build output directories that may still be gitignored
+          for dirname in build public dist out; do
+            find . -name "$dirname" -type d -maxdepth 3 | while read d; do
+              if [ -f "$d/index.html" ]; then
+                echo "Force-adding build output: $d"
+                git add -f "$d/"
+              fi
+            done
+          done
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else
-            git commit --no-verify -m "Phase 1: Sync from source ${{ steps.get_sha.outputs.sha }} and generate i18n JSONs"
+            git commit --no-verify -m "Sync + build from source ${{ steps.get_sha.outputs.sha }}"
             git push origin main
           fi
