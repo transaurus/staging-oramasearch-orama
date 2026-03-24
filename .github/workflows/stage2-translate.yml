@@ -1,0 +1,147 @@
+name: 'Stage 2: Translate and Rebuild'
+
+on:
+  push:
+    paths:
+      - '.github/workflows/stage2-translate.yml'
+  workflow_dispatch:
+    inputs:
+      locales:
+        description: 'Comma-separated locales to add'
+        required: true
+        default: 'zh-Hans'
+
+jobs:
+  translate_and_rebuild:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 'main'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 'Enable Corepack'
+        run: corepack enable
+
+      - name: 'Read meta.json'
+        id: meta
+        run: |
+          echo "buildCommand=$(jq -r '.buildCommand // "npx docusaurus build"' .github/scripts/meta.json)" >> $GITHUB_OUTPUT
+          echo "buildOutput=$(jq -r '.buildOutput // "build"' .github/scripts/meta.json)" >> $GITHUB_OUTPUT
+          echo "docusaurusRoot=$(jq -r '.docusaurusRoot // "."' .github/scripts/meta.json)" >> $GITHUB_OUTPUT
+
+      - name: 'Add i18n locale config'
+        run: |
+          LOCALES="${{ github.event.inputs.locales }}"
+          CONFIG_FILE=$(find . -name "docusaurus.config.*" -not -path "./node_modules/*" -not -path "./.git/*" | head -1)
+          [ -z "$CONFIG_FILE" ] && echo "ERROR: No config found" && exit 1
+          echo "Config: $CONFIG_FILE"
+          
+          node -e "
+          const fs = require('fs');
+          let c = fs.readFileSync('$CONFIG_FILE', 'utf8');
+          const targets = '${LOCALES}'.split(',');
+          
+          // Find the locales array in i18n config
+          const m = c.match(/locales:\s*\[([^\]]*)\]/);
+          if (m) {
+            // Existing locales array — add missing locales
+            const existing = m[1];
+            const toAdd = targets.filter(l => !existing.includes(l));
+            if (toAdd.length === 0) { console.log('All locales already in locales array'); process.exit(0); }
+            const newArr = existing.trimEnd() + ', ' + toAdd.map(l => '\"' + l + '\"').join(', ');
+            c = c.replace(m[0], 'locales: [' + newArr + ']');
+            console.log('Added locales:', toAdd.join(', '));
+          } else {
+            // No locales array — inject full i18n block
+            const locArr = ['en', ...targets].map(l => '\"' + l + '\"').join(', ');
+            const block = '
+  i18n: { defaultLocale: \"en\", locales: [' + locArr + '] },';
+            for (const p of [/(module\.exports\s*=\s*\{)/, /(export\s+default\s*\{)/, /(const\s+config\s*[:=]\s*\{)/]) {
+              const pm = c.match(p);
+              if (pm) { c = c.slice(0, pm.index + pm[0].length) + block + c.slice(pm.index + pm[0].length); break; }
+            }
+            console.log('Injected new i18n block');
+          }
+          fs.writeFileSync('$CONFIG_FILE', c);
+          "
+
+      - name: 'Place translated files (placeholder copies)'
+        run: |
+          DOC_ROOT="${{ steps.meta.outputs.docusaurusRoot }}"
+          for LOCALE in $(echo "${{ github.event.inputs.locales }}" | tr ',' ' '); do
+            echo "Setting up locale: $LOCALE"
+            # Copy i18n JSON files
+            SRC_I18N="${DOC_ROOT}/i18n/en"
+            [ ! -d "$SRC_I18N" ] && SRC_I18N="i18n/en"
+            if [ -d "$SRC_I18N" ]; then
+              DST_I18N="${DOC_ROOT}/i18n/${LOCALE}"
+              [ "$DOC_ROOT" = "." ] && DST_I18N="i18n/${LOCALE}"
+              mkdir -p "$DST_I18N"
+              cp -r "$SRC_I18N/"* "$DST_I18N/"
+              echo "  Copied $(find "$DST_I18N" -name '*.json' | wc -l) JSON files"
+            fi
+            # Copy docs
+            DOCS_DIR="${DOC_ROOT}/docs"
+            [ ! -d "$DOCS_DIR" ] && DOCS_DIR="docs"
+            if [ -d "$DOCS_DIR" ]; then
+              TARGET="${DOC_ROOT}/i18n/${LOCALE}/docusaurus-plugin-content-docs/current"
+              [ "$DOC_ROOT" = "." ] && TARGET="i18n/${LOCALE}/docusaurus-plugin-content-docs/current"
+              mkdir -p "$TARGET"
+              cp -r "$DOCS_DIR/"* "$TARGET/"
+              echo "  Copied $(find "$TARGET" -type f | wc -l) doc files"
+            fi
+          done
+
+      - name: 'Rebuild'
+        run: |
+          if [ -f ".github/scripts/rebuild.sh" ]; then
+            chmod +x .github/scripts/rebuild.sh
+            bash .github/scripts/rebuild.sh
+          else
+            echo "No rebuild.sh, using meta.json"
+            if [ -f "pnpm-lock.yaml" ]; then
+              npm install -g pnpm && pnpm install --no-frozen-lockfile
+            elif [ -f "yarn.lock" ]; then
+              yarn install --frozen-lockfile 2>/dev/null || yarn install
+            else
+              npm install --legacy-peer-deps 2>/dev/null || npm install
+            fi
+            ${{ steps.meta.outputs.buildCommand }}
+          fi
+
+      - name: 'Verify build'
+        run: |
+          BUILD_OUTPUT="${{ steps.meta.outputs.buildOutput }}"
+          if [ -d "$BUILD_OUTPUT" ]; then
+            TOTAL=$(find "$BUILD_OUTPUT" -type f | wc -l)
+            echo "Build: $TOTAL files total"
+            for LOCALE in $(echo "${{ github.event.inputs.locales }}" | tr ',' ' '); do
+              if [ -d "$BUILD_OUTPUT/$LOCALE" ]; then
+                echo "  $LOCALE: $(find "$BUILD_OUTPUT/$LOCALE" -type f | wc -l) files"
+              fi
+            done
+          else
+            echo "WARNING: $BUILD_OUTPUT not found"
+            find . -name "index.html" -path "*build*" -o -name "index.html" -path "*public*" 2>/dev/null | head -5
+          fi
+
+      - name: 'Commit'
+        run: |
+          BUILD_OUTPUT="${{ steps.meta.outputs.buildOutput }}"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .
+          find . -name "$BUILD_OUTPUT" -type d -maxdepth 4 -not -path "./.git/*" | while read d; do
+            [ -f "$d/index.html" ] && git add -f "$d/" || true
+          done
+          if ! git diff --staged --quiet; then
+            git commit --no-verify -m "Stage 2: translations (${{ github.event.inputs.locales }})"
+            git push origin main
+          fi
