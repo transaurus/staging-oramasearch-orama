@@ -1,0 +1,9 @@
+{
+  "sourceUrl": "https://github.com/oramasearch/orama",
+  "branch": "main",
+  "docusaurusRoot": "sandboxes/plugin-docusaurus-v3-sandbox",
+  "translateCommand": "pnpm write-translations",
+  "buildCommand": "pnpm build:docs",
+  "buildOutput": "build",
+  "packageManager": "pnpm"
+}
